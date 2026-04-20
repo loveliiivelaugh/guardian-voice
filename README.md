@@ -86,6 +86,37 @@ VOICEBOX_VOICE_MAP={}
 STT_DEFAULT_MODEL=whisper-1
 ```
 
+## Docker / microservices deployment
+
+This repo now includes:
+
+- `Dockerfile.bun` for the Bun + Hono API service
+- `Dockerfile.openwebui` for the Python Open WebUI-compatible service
+- `docker-compose.yml` for running both together
+
+### Recommended flow
+
+- Run `guardian-voice-bun` as the main API you point other internal services at
+- Run `guardian-voice-openwebui` as the Open WebUI-compatible audio backend
+- Mount your local `whisper.cpp` checkout into both services
+- Optionally point TTS to a local VoiceBox service using `VOICEBOX_BASE_URL`
+
+### Compose startup
+
+```bash
+cp .env.openwebui.example .env.openwebui
+docker compose up --build
+```
+
+### Open WebUI connection target
+
+For Open WebUI, point these env vars at either service, depending on which surface you want to expose:
+
+- Bun service: `http://host.docker.internal:5678` or your mapped host/VM URL
+- Python service: `http://host.docker.internal:5002`
+
+If you want one canonical internal endpoint, I’d use the Bun service as the stable API edge and keep the Python service as a backend helper.
+
 ---
 
 ## !! IMPORTANT !!

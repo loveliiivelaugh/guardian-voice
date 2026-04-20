@@ -1,0 +1,55 @@
+version: '3.9'
+
+services:
+  guardian-voice-bun:
+    build:
+      context: .
+      dockerfile: Dockerfile.bun
+    container_name: guardian-voice-bun
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    env_file:
+      - .env.openwebui
+    environment:
+      PORT: 5678
+      TTS_BACKEND: ${TTS_BACKEND:-coqui}
+      TTS_SERVICE_URL: http://guardian-voice-openwebui:5002
+      VOICEBOX_BASE_URL: ${VOICEBOX_BASE_URL:-http://host.docker.internal:17493}
+      STT_DEFAULT_MODEL: ${STT_DEFAULT_MODEL:-whisper-1}
+      WHISPER_CPP_DIR: ${WHISPER_CPP_DIR:-/opt/whisper.cpp}
+      WHISPER_CLI_PATH: ${WHISPER_CLI_PATH:-/opt/whisper.cpp/build/bin/whisper-cli}
+      WHISPER_MODEL_PATH: ${WHISPER_MODEL_PATH:-/opt/whisper.cpp/models/ggml-base.en.bin}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - ${WHISPER_CPP_HOST_PATH:-~/Projects/whisper.cpp}:${WHISPER_CPP_DIR:-/opt/whisper.cpp}
+    depends_on:
+      - guardian-voice-openwebui
+
+  guardian-voice-openwebui:
+    build:
+      context: .
+      dockerfile: Dockerfile.openwebui
+    container_name: guardian-voice-openwebui
+    restart: unless-stopped
+    ports:
+      - "5002:5002"
+    env_file:
+      - .env.openwebui
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: 5002
+      TTS_BACKEND: ${TTS_BACKEND:-coqui}
+      VOICEBOX_BASE_URL: ${VOICEBOX_BASE_URL:-http://host.docker.internal:17493}
+      WHISPER_CPP_DIR: ${WHISPER_CPP_DIR:-/opt/whisper.cpp}
+      WHISPER_CLI_PATH: ${WHISPER_CLI_PATH:-/opt/whisper.cpp/build/bin/whisper-cli}
+      WHISPER_MODEL_PATH: ${WHISPER_MODEL_PATH:-/opt/whisper.cpp/models/ggml-base.en.bin}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - ${WHISPER_CPP_HOST_PATH:-~/Projects/whisper.cpp}:${WHISPER_CPP_DIR:-/opt/whisper.cpp}
+      - guardian-voice-out:/app/out
+
+volumes:
+  guardian-voice-out:
