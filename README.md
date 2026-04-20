@@ -2,6 +2,62 @@
 
 This README documents the current implementation and debugging steps for the Voice Agent Service.
 
+## Open WebUI compatibility
+
+This repo now includes `openwebui_server.py`, which exposes OpenAI-compatible audio endpoints for Open WebUI:
+
+- `POST /audio/transcriptions` for STT
+- `POST /audio/speech` for TTS
+- `GET /audio/models`
+- `GET /audio/voices`
+- `GET /health`
+
+It supports:
+
+- `STT_BACKEND=whispercpp` using local `whisper.cpp`
+- `TTS_BACKEND=coqui` using local Coqui TTS
+- `TTS_BACKEND=voicebox` using a running VoiceBox service, for example `VOICEBOX_BASE_URL=http://127.0.0.1:17493`
+
+### Suggested Open WebUI environment variables
+
+```yaml
+environment:
+  - AUDIO_STT_ENGINE=openai
+  - AUDIO_STT_OPENAI_API_BASE_URL=http://host.docker.internal:5002
+  - AUDIO_STT_OPENAI_API_KEY=replace-with-your-api-key
+  - AUDIO_STT_MODEL=whisper-1
+  - AUDIO_TTS_ENGINE=openai
+  - AUDIO_TTS_OPENAI_API_BASE_URL=http://host.docker.internal:5002
+  - AUDIO_TTS_OPENAI_API_KEY=replace-with-your-api-key
+  - AUDIO_TTS_MODEL=tts-1
+  - AUDIO_TTS_VOICE=default
+```
+
+### Open WebUI server env vars
+
+```bash
+APP_HOST=0.0.0.0
+APP_PORT=5002
+TTS_API_KEY=replace-with-your-api-key
+
+# TTS backend selection
+TTS_BACKEND=coqui
+# or
+TTS_BACKEND=voicebox
+VOICEBOX_BASE_URL=http://127.0.0.1:17493
+VOICEBOX_PROFILE_ID=
+VOICEBOX_VOICE_MAP={}
+VOICEBOX_DEFAULT_VOICE=default
+VOICEBOX_DEFAULT_MODEL=voicebox
+
+# STT backend selection
+STT_BACKEND=whispercpp
+WHISPER_CPP_DIR=~/Projects/whisper.cpp
+WHISPER_CLI_PATH=~/Projects/whisper.cpp/build/bin/whisper-cli
+WHISPER_MODEL_PATH=~/Projects/whisper.cpp/models/ggml-base.en.bin
+FFMPEG_BIN=ffmpeg
+```
+
 ---
 
 ## !! IMPORTANT !!
