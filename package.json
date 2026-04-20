@@ -1,0 +1,21 @@
+{
+  "name": "voice",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/play-sound": "^1.1.2",
+    "@types/wav": "^1.0.4",
+    "bun-types": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.1",
+    "axios": "^1.9.0",
+    "mic": "^2.1.2",
+    "node-record-lpcm16": "^1.0.1",
+    "play-sound": "^1.1.6",
+    "wav": "^1.0.2"
+  }
+}

@@ -1,0 +1,65 @@
+# Node / Bun
+node_modules/
+.npm/
+.pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+*.log
+
+# Build / coverage / caches
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+dist/
+out/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+.rpt2_cache/
+.rts2_cache_*/
+.tmp/
+.temp/
+
+# Runtime artifacts
+pids/
+*.pid
+*.pid.lock
+report.*.json
+*.tgz
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# Local model / generated assets
+recordings/
+tmp/
+audio/*.wav
+out.wav
+tts_server/out/
+voice_analyzer/wav2vec2_checkpoints/
+voice_analyzer/pretrained_models/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+.vscode-test/
