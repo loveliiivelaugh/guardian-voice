@@ -11,7 +11,7 @@ import path from 'path';
 // const __dirname = path.dirname(__filename);
 
 // Whisper relative path from current file
-const whisperCppDir = path.resolve(__dirname, '../../../../whisper.cpp');
+const whisperCppDir = process.env.WHISPER_CPP_DIR || path.resolve(__dirname, '../../../../whisper.cpp');
 
 // export async function transcribeAudio(filePath: string): Promise<string> {
 //   return new Promise((resolve, reject) => {

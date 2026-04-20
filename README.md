@@ -341,3 +341,22 @@ Output:
 This repo is now set up to act as both:
 - a Guardian-native voice microservice layer
 - an Open WebUI-compatible self-hosted voice backend
+
+## New updates in this branch
+
+The original instructions above remain the primary setup path. In addition, this branch includes an optional dockerized voice analyzer service.
+
+### Optional analyzer service
+
+Start with the same main stack command:
+
+```bash
+cp .env.openwebui.example .env.openwebui
+docker compose up --build
+```
+
+With this update, the same compose stack also starts:
+- `guardian-voice-analyzer` on port `5003`
+
+Analyzer endpoint:
+- `POST /api/analyze` at `http://localhost:5003/api/analyze`
