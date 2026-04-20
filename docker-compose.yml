@@ -1,0 +1,39 @@
+services:
+  voice-transcribe:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5678:5678"
+    volumes:
+      - ./:/app
+      - whispercpp:/opt/whisper.cpp
+    environment:
+      WHISPER_CPP_DIR: /opt/whisper.cpp
+    restart: unless-stopped
+
+  voice-tts:
+    build:
+      context: .
+      dockerfile: tts_server/Dockerfile
+    ports:
+      - "5002:5002"
+    env_file:
+      - tts_server/.env
+    volumes:
+      - ./tts_server/out:/app/out
+    restart: unless-stopped
+
+  voice-analyzer:
+    build:
+      context: .
+      dockerfile: voice_analyzer/Dockerfile
+    ports:
+      - "5003:5003"
+    volumes:
+      - ./voice_analyzer/pretrained_models:/app/pretrained_models
+      - ./voice_analyzer/wav2vec2_checkpoints:/app/wav2vec2_checkpoints
+    restart: unless-stopped
+
+volumes:
+  whispercpp:

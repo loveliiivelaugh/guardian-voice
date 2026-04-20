@@ -36,6 +36,7 @@ report.*.json
 .env.*
 !.env.example
 !.env.*.example
+!tts_server/.env.example
 
 # Python
 __pycache__/
