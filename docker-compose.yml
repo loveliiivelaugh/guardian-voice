@@ -7,7 +7,7 @@ services:
       - "5678:5678"
     volumes:
       - ./:/app
-      - whispercpp:/opt/whisper.cpp
+      - /Users/michaelwoodard/Projects/FamilyAppsSuite/framework/whisper.cpp:/opt/whisper.cpp
     environment:
       WHISPER_CPP_DIR: /opt/whisper.cpp
     restart: unless-stopped
@@ -35,5 +35,3 @@ services:
       - ./voice_analyzer/wav2vec2_checkpoints:/app/wav2vec2_checkpoints
     restart: unless-stopped
 
-volumes:
-  whispercpp:
