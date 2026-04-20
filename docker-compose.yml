@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   guardian-voice-bun:
     build:
@@ -23,9 +21,16 @@ services:
     extra_hosts:
       - host.docker.internal:host-gateway
     volumes:
-      - ${WHISPER_CPP_HOST_PATH:-~/Projects/whisper.cpp}:${WHISPER_CPP_DIR:-/opt/whisper.cpp}
+      - ${WHISPER_CPP_HOST_PATH}:${WHISPER_CPP_DIR:-/opt/whisper.cpp}
     depends_on:
-      - guardian-voice-openwebui
+      guardian-voice-openwebui:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:5678/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   guardian-voice-openwebui:
     build:
@@ -48,8 +53,14 @@ services:
     extra_hosts:
       - host.docker.internal:host-gateway
     volumes:
-      - ${WHISPER_CPP_HOST_PATH:-~/Projects/whisper.cpp}:${WHISPER_CPP_DIR:-/opt/whisper.cpp}
+      - ${WHISPER_CPP_HOST_PATH}:${WHISPER_CPP_DIR:-/opt/whisper.cpp}
       - guardian-voice-out:/app/out
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5002/health').status==200 else 1)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
 volumes:
   guardian-voice-out:

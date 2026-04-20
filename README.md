@@ -1,247 +1,343 @@
-# Voice Agent Setup and Debug Guide
+# guardian-voice
 
-This README documents the current implementation and debugging steps for the Voice Agent Service.
+A voice microservice stack for Guardian and Open WebUI.
 
-## Open WebUI compatibility
+This repo exists because there are really two slightly different integration problems to solve:
 
-This repo now includes both a Python service, `openwebui_server.py`, and the main Bun + Hono service in `index.ts`, each exposing OpenAI-compatible audio endpoints for Open WebUI:
+1. *Guardian-native voice microservices* for your existing Bun + Hono and docker-compose architecture
+2. *Open WebUI-compatible audio APIs* that look like OpenAI-style STT/TTS endpoints
 
-- `POST /audio/transcriptions` for STT
-- `POST /audio/speech` for TTS
+Instead of forcing one system to pretend to be the other everywhere, this repo now supports both cleanly.
+
+## Why these microservices exist
+
+### 1. Bun + Hono service
+
+The Bun service is the *canonical app-facing API edge*.
+
+Why it exists:
+- it matches your normal microservice architecture
+- it is lightweight and easy to compose into the rest of Guardian
+- it preserves legacy routes like `/transcribe`
+- it now also exposes Open WebUI-compatible routes so you do not need a completely separate adapter repo
+
+Use it when:
+- Guardian or other internal services need a voice API
+- you want one stable API edge in docker-compose
+- you want to proxy to Coqui or VoiceBox without changing callers
+
+### 2. Python Open WebUI-compatible service
+
+The Python service exists because the Coqui TTS implementation already lives naturally in Python, and Open WebUI wants a very specific HTTP contract.
+
+Why it exists:
+- Coqui TTS is easiest to host and control in Python
+- Open WebUI expects OpenAI-style `/audio/speech` and `/audio/transcriptions`
+- it gives you a direct compatibility surface for Open WebUI without forcing Bun to own every inference detail
+- it can act as a backend helper behind the Bun service
+
+Use it when:
+- you want a direct Open WebUI-compatible backend
+- you want Coqui hosted close to the TTS inference layer
+- you want Bun to proxy to a simpler Python speech service
+
+## Current architecture
+
+### Services in this repo
+
+#### Bun + Hono API (`index.ts`)
+
+Routes:
+- `GET /health`
 - `GET /audio/models`
 - `GET /audio/voices`
+- `POST /audio/speech`
+- `POST /audio/transcriptions`
+- `POST /transcribe` (legacy)
+
+Capabilities:
+- STT via local `whisper.cpp`
+- TTS via Coqui backend
+- TTS via VoiceBox backend
+- Open WebUI-compatible request/response shapes
+- backward compatibility with the earlier JSON base64 transcription route
+
+#### Python Open WebUI service (`openwebui_server.py`)
+
+Routes:
 - `GET /health`
+- `GET /audio/models`
+- `GET /audio/voices`
+- `POST /audio/speech`
+- `POST /audio/transcriptions`
+- `POST /v1/tts`
 
-They support:
+Capabilities:
+- Open WebUI-compatible STT/TTS endpoints
+- direct Coqui inference
+- VoiceBox passthrough mode
+- local `whisper.cpp` transcription
 
-- `STT_BACKEND=whispercpp` using local `whisper.cpp`
-- `TTS_BACKEND=coqui` using local Coqui TTS
-- `TTS_BACKEND=voicebox` using a running VoiceBox service, for example `VOICEBOX_BASE_URL=http://127.0.0.1:17493`
+#### Coqui TTS server (`tts_server/`)
 
-For the Bun + Hono service, `/audio/transcriptions` and `/audio/speech` now live beside the legacy `/transcribe` route so existing microservice patterns still work.
+This is the local TTS service layer and remains useful as a backend building block.
 
-### Suggested Open WebUI environment variables
+#### Voice analyzer (`voice_analyzer/`)
 
-```yaml
-environment:
-  - AUDIO_STT_ENGINE=openai
-  - AUDIO_STT_OPENAI_API_BASE_URL=http://host.docker.internal:5002
-  - AUDIO_STT_OPENAI_API_KEY=replace-with-your-api-key
-  - AUDIO_STT_MODEL=whisper-1
-  - AUDIO_TTS_ENGINE=openai
-  - AUDIO_TTS_OPENAI_API_BASE_URL=http://host.docker.internal:5002
-  - AUDIO_TTS_OPENAI_API_KEY=replace-with-your-api-key
-  - AUDIO_TTS_MODEL=tts-1
-  - AUDIO_TTS_VOICE=default
+This is separate from the Open WebUI integration path. It provides speaker and emotion analysis for future voice-aware agent experiences.
+
+## Backend support
+
+### Speech-to-text
+
+Current STT backend:
+- `whisper.cpp`
+
+How it works:
+- incoming audio is normalized through `ffmpeg`
+- audio is converted to mono, 16kHz, 16-bit PCM
+- `whisper-cli` runs locally against your configured model
+
+### Text-to-speech
+
+Current TTS backends:
+- `coqui`
+- `voicebox`
+
+#### Coqui
+
+Use Coqui when:
+- you want local, direct TTS inference
+- you already have your existing Coqui stack working
+- you want a simple default path
+
+#### VoiceBox
+
+Use VoiceBox when:
+- you want higher-quality and more flexible voice generation
+- you want profile-based voice selection
+- you want to grow into richer voice UX
+
+VoiceBox integration supports:
+- `VOICEBOX_PROFILE_ID`
+- `VOICEBOX_VOICE_MAP`
+- fallback to the first profile returned from `/profiles`
+
+## Why Open WebUI compatibility matters
+
+Open WebUI does not talk to arbitrary custom speech APIs directly. In its OpenAI audio mode it expects endpoints shaped like:
+
+- `POST /audio/transcriptions`
+- `POST /audio/speech`
+- optionally `GET /audio/models`
+- optionally `GET /audio/voices`
+
+This repo now exposes those routes so your self-hosted voice stack can plug into Open WebUI without needing cloud audio services.
+
+That gives you:
+- self-hosted STT
+- self-hosted TTS
+- Docker-friendly deployment
+- the ability to switch TTS engines without changing Open WebUI itself
+
+## Environment variables
+
+### Shared / common
+
+```bash
+TTS_API_KEY=replace-with-your-api-key
+TTS_MAX_TEXT_CHARS=5000
+TTS_BACKEND=coqui
+
+# STT
+STT_DEFAULT_MODEL=whisper-1
+STT_SUPPORTED_CONTENT_TYPES=audio/wav,audio/x-wav,audio/mpeg,audio/mp3,audio/webm,audio/mp4,audio/flac,audio/m4a,video/webm
+WHISPER_CPP_HOST_PATH=/absolute/path/to/whisper.cpp
+WHISPER_CPP_DIR=/opt/whisper.cpp
+WHISPER_CLI_PATH=/opt/whisper.cpp/build/bin/whisper-cli
+WHISPER_MODEL_PATH=/opt/whisper.cpp/models/ggml-base.en.bin
+FFMPEG_BIN=ffmpeg
 ```
 
-### Open WebUI server env vars
+### Bun + Hono service
+
+```bash
+PORT=5678
+TTS_SERVICE_URL=http://guardian-voice-openwebui:5002
+```
+
+### Python Open WebUI service
 
 ```bash
 APP_HOST=0.0.0.0
 APP_PORT=5002
-TTS_API_KEY=replace-with-your-api-key
+TTS_MODEL_NAME=tts_models/en/jenny/jenny
+TTS_GPU=false
+```
 
-# TTS backend selection
-TTS_BACKEND=coqui
-# or
+### VoiceBox
+
+```bash
 TTS_BACKEND=voicebox
-VOICEBOX_BASE_URL=http://127.0.0.1:17493
+VOICEBOX_BASE_URL=http://host.docker.internal:17493
+VOICEBOX_TIMEOUT_SECONDS=180
 VOICEBOX_PROFILE_ID=
-VOICEBOX_VOICE_MAP={}
-VOICEBOX_DEFAULT_VOICE=default
+VOICEBOX_LANGUAGE=
 VOICEBOX_DEFAULT_MODEL=voicebox
-
-# STT backend selection
-STT_BACKEND=whispercpp
-WHISPER_CPP_DIR=~/Projects/whisper.cpp
-WHISPER_CLI_PATH=~/Projects/whisper.cpp/build/bin/whisper-cli
-WHISPER_MODEL_PATH=~/Projects/whisper.cpp/models/ggml-base.en.bin
-FFMPEG_BIN=ffmpeg
-```
-
-### Bun + Hono service notes
-
-The Bun service in `index.ts` now supports:
-
-- `POST /transcribe` (legacy JSON base64 STT route)
-- `POST /audio/transcriptions` (OpenAI-compatible multipart STT route)
-- `POST /audio/speech` (OpenAI-compatible TTS route)
-- `GET /audio/models`
-- `GET /audio/voices`
-- `GET /health`
-
-Useful env vars for the Bun service:
-
-```bash
-PORT=5678
-TTS_API_KEY=replace-with-your-api-key
-TTS_BACKEND=coqui
-TTS_SERVICE_URL=http://127.0.0.1:5002
-# or
-TTS_BACKEND=voicebox
-VOICEBOX_BASE_URL=http://127.0.0.1:17493
-VOICEBOX_PROFILE_ID=
+VOICEBOX_DEFAULT_VOICE=default
 VOICEBOX_VOICE_MAP={}
-STT_DEFAULT_MODEL=whisper-1
 ```
 
-## Docker / microservices deployment
+## Local development
 
-This repo now includes:
-
-- `Dockerfile.bun` for the Bun + Hono API service
-- `Dockerfile.openwebui` for the Python Open WebUI-compatible service
-- `docker-compose.yml` for running both together
-
-### Recommended flow
-
-- Run `guardian-voice-bun` as the main API you point other internal services at
-- Run `guardian-voice-openwebui` as the Open WebUI-compatible audio backend
-- Mount your local `whisper.cpp` checkout into both services
-- Optionally point TTS to a local VoiceBox service using `VOICEBOX_BASE_URL`
-
-### Compose startup
+### Bun service
 
 ```bash
-cp .env.openwebui.example .env.openwebui
-docker compose up --build
-```
-
-### Open WebUI connection target
-
-For Open WebUI, point these env vars at either service, depending on which surface you want to expose:
-
-- Bun service: `http://host.docker.internal:5678` or your mapped host/VM URL
-- Python service: `http://host.docker.internal:5002`
-
-If you want one canonical internal endpoint, I’d use the Bun service as the stable API edge and keep the Python service as a backend helper.
-
----
-
-## !! IMPORTANT !!
-
-BOTH THE WHISPER VOICE SERVER AND THE COQUI TTS SERVER MUST BE RUNNING FOR THIS TO WORK.
-BOTH SERVICES ARE IN THIS REPO.
-
-
-## ✅ Voice Agent Overview
-
-* Passive listener for wake word (e.g., "Hey Assistant")
-* Records 5-second command after detection
-* Transcribes using `whisper.cpp`
-* Sends transcript to upstream voice API
-* Receives TTS reply from local Coqui server
-* Plays spoken response aloud
-
----
-
-## 📦 Dependencies
-
-* `node-record-lpcm16`
-* `whisper.cpp` (compiled locally)
-* `axios`
-* Python TTS server (Coqui via `TTS`) running at `http://localhost:5002`
-
----
-
-## 🔁 Voice Loop Process
-
-1. Microphone streams incoming audio
-2. `temp.wav` buffer saved (used for detecting wake word)
-3. If `detectWakeWord()` matches, begin listening
-4. Record 5-second clip into `/recordings/*.wav`
-5. Transcribe using `transcribeAudio()` (calls `whisper-cli`)
-6. Send to upstream voice API: `POST /api/v1/voice/ingest`
-7. Use `speakText()` → `POST /api/tts`
-8. Play the audio output
-
----
-
-## 🐛 Troubleshooting
-
-### Wake Word Not Triggering
-
-* Log transcript before detection:
-
-  ```ts
-  console.log('Transcript:', transcript);
-  ```
-* Check `temp.wav` plays with `afplay ./tmp/temp.wav`
-* Adjust buffer size or add `setTimeout` before transcription
-
-### Whisper Errors
-
-* Confirm model path:
-
-  ```
-  whisper.cpp/models/ggml-base.en.bin
-  ```
-* Ensure audio file is valid WAV (check sample rate = 16000)
-* Ignore Metal backend warnings unless fatal
-
-### TTS Not Playing
-
-* Log response from `speakText()`
-* Test TTS manually:
-
-  ```bash
-  curl -X POST http://localhost:5002/api/tts \
-       -H "Content-Type: application/json" \
-       -d '{"text": "Voice service is online"}'
-  ```
-* Ensure response file is played with `afplay` or `playAudioFile()`
-
-### Python TTS Errors
-
-* Fix `NameError: 'jsonify' is not defined` by adding:
-
-  ```python
-  from flask import jsonify
-  ```
-* Handle ZeroDivisionError in Coqui with:
-
-  ```python
-  audio_time = max(len(wav) / self.output_sample_rate, 0.1)
-  ```
-
----
-
-## 📂 File Structure
-
-```
-voice/
-├── index.ts                  # Main entry for voice agent
-├── tmp/temp.wav             # Short buffer for wake detection
-├── recordings/              # Full command recordings
-├── helpers/
-│   ├── transcribeAudio.ts   # Whisper CLI call
-│   ├── wakeWord.ts          # Wake word detection logic
-│   ├── tts.ts               # speakText via Coqui
-│   └── audioPlayer.ts       # Play audio file
-```
-
----
-
-## 📌 Next Steps
-
-* Improve wake word sensitivity & duration handling
-* Add fallback logging for no transcript
-* Store audio + transcript for review/debug
-* Make wake detection async-compatible
-* Add real-time VAD if needed
-
----
-
-When returning, start with:
-
-```bash
-cd voice
+bun install
 bun run index.ts
 ```
 
-Then test:
+### Python Open WebUI service
 
-* Say "Hey Assistant"
-* Wait for recording
-* Ensure TTS response plays
+```bash
+pip install -r requirements-openwebui.txt
+cp .env.openwebui.example .env.openwebui
+python3 openwebui_server.py
+```
+
+## Docker deployment
+
+This repo includes:
+- `Dockerfile.bun`
+- `Dockerfile.openwebui`
+- `docker-compose.yml`
+- `docker-compose.openwebui.yml`
+
+### Main stack
+
+```bash
+cp .env.openwebui.example .env.openwebui
+# edit .env.openwebui and set WHISPER_CPP_HOST_PATH to an absolute local path
+
+docker compose up --build
+```
+
+This starts:
+- `guardian-voice-bun` on port `5678`
+- `guardian-voice-openwebui` on port `5002`
+
+### Open WebUI stack overlay
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.openwebui.yml up --build
+```
+
+This additionally starts:
+- `open-webui` on port `3000`
+
+## Recommended deployment pattern
+
+My recommendation is:
+
+- treat `guardian-voice-bun` as the stable API edge
+- keep `guardian-voice-openwebui` as the speech compatibility backend
+- point Open WebUI at the Bun service unless you have a reason to use the Python service directly
+- use VoiceBox for premium TTS when available
+- keep Coqui as fallback/default local TTS
+
+That gives you a clean split:
+- *Bun owns app/API orchestration*
+- *Python owns speech inference ergonomics where useful*
+- *Open WebUI gets a stable compatible contract*
+
+## Open WebUI configuration
+
+Set these in the Open WebUI container:
+
+```bash
+AUDIO_STT_ENGINE=openai
+AUDIO_STT_OPENAI_API_BASE_URL=http://host.docker.internal:5678
+AUDIO_STT_OPENAI_API_KEY=replace-with-your-api-key
+AUDIO_STT_MODEL=whisper-1
+
+AUDIO_TTS_ENGINE=openai
+AUDIO_TTS_OPENAI_API_BASE_URL=http://host.docker.internal:5678
+AUDIO_TTS_OPENAI_API_KEY=replace-with-your-api-key
+AUDIO_TTS_MODEL=tts-1
+AUDIO_TTS_VOICE=default
+AUDIO_TTS_SPLIT_ON=punctuation
+```
+
+If Open WebUI is on the same compose network and you prefer internal addressing, use the service DNS name instead of `host.docker.internal`.
+
+## Healthchecks and startup notes
+
+The compose files include healthchecks so dependent services do not start blind.
+
+Important notes:
+- `WHISPER_CPP_HOST_PATH` is required in `.env.openwebui` and must be an *absolute* host path
+- ensure the mounted `whisper.cpp` build already contains `build/bin/whisper-cli`
+- ensure the model file exists at the configured path
+- if VoiceBox runs on the host, `host.docker.internal` must resolve from Docker on your machine
+- the compose stack is intentionally strict here so it fails early instead of silently booting without Whisper
+
+## Route summary
+
+### Bun service
+
+#### `POST /audio/transcriptions`
+OpenAI-compatible multipart STT endpoint.
+
+Input:
+- multipart form field: `file`
+- optional form fields: `model`, `language`
+
+Output:
+```json
+{ "text": "hello world" }
+```
+
+#### `POST /audio/speech`
+OpenAI-compatible TTS endpoint.
+
+Input:
+```json
+{
+  "model": "tts-1",
+  "voice": "default",
+  "input": "Hello world"
+}
+```
+
+Output:
+- raw audio bytes
+
+#### `POST /transcribe`
+Legacy route.
+
+Input:
+```json
+{ "audio": "<base64>" }
+```
+
+Output:
+```json
+{ "transcription": "hello world" }
+```
+
+## Commits added during this integration
+
+- `9c78723` Add Open WebUI-compatible audio endpoints
+- `4cbf5c5` Add Open WebUI routes to Bun voice service
+- `96419ee` Add container packaging for voice microservices
+
+## Next recommended follow-ups
+
+- runtime-test VoiceBox once the service is reachable
+- add profile/voice naming conventions for your preferred personas
+- add response format transcoding if you want mp3/opus output instead of wav-only defaults
+- optionally add a reverse proxy or gateway ingress in front of the stack
+
+This repo is now set up to act as both:
+- a Guardian-native voice microservice layer
+- an Open WebUI-compatible self-hosted voice backend
