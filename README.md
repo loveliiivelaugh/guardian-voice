@@ -4,7 +4,7 @@ This README documents the current implementation and debugging steps for the Voi
 
 ## Open WebUI compatibility
 
-This repo now includes `openwebui_server.py`, which exposes OpenAI-compatible audio endpoints for Open WebUI:
+This repo now includes both a Python service, `openwebui_server.py`, and the main Bun + Hono service in `index.ts`, each exposing OpenAI-compatible audio endpoints for Open WebUI:
 
 - `POST /audio/transcriptions` for STT
 - `POST /audio/speech` for TTS
@@ -12,11 +12,13 @@ This repo now includes `openwebui_server.py`, which exposes OpenAI-compatible au
 - `GET /audio/voices`
 - `GET /health`
 
-It supports:
+They support:
 
 - `STT_BACKEND=whispercpp` using local `whisper.cpp`
 - `TTS_BACKEND=coqui` using local Coqui TTS
 - `TTS_BACKEND=voicebox` using a running VoiceBox service, for example `VOICEBOX_BASE_URL=http://127.0.0.1:17493`
+
+For the Bun + Hono service, `/audio/transcriptions` and `/audio/speech` now live beside the legacy `/transcribe` route so existing microservice patterns still work.
 
 ### Suggested Open WebUI environment variables
 
@@ -56,6 +58,32 @@ WHISPER_CPP_DIR=~/Projects/whisper.cpp
 WHISPER_CLI_PATH=~/Projects/whisper.cpp/build/bin/whisper-cli
 WHISPER_MODEL_PATH=~/Projects/whisper.cpp/models/ggml-base.en.bin
 FFMPEG_BIN=ffmpeg
+```
+
+### Bun + Hono service notes
+
+The Bun service in `index.ts` now supports:
+
+- `POST /transcribe` (legacy JSON base64 STT route)
+- `POST /audio/transcriptions` (OpenAI-compatible multipart STT route)
+- `POST /audio/speech` (OpenAI-compatible TTS route)
+- `GET /audio/models`
+- `GET /audio/voices`
+- `GET /health`
+
+Useful env vars for the Bun service:
+
+```bash
+PORT=5678
+TTS_API_KEY=replace-with-your-api-key
+TTS_BACKEND=coqui
+TTS_SERVICE_URL=http://127.0.0.1:5002
+# or
+TTS_BACKEND=voicebox
+VOICEBOX_BASE_URL=http://127.0.0.1:17493
+VOICEBOX_PROFILE_ID=
+VOICEBOX_VOICE_MAP={}
+STT_DEFAULT_MODEL=whisper-1
 ```
 
 ---
